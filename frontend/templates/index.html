@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Multi-Cloud DevOps Platform
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="/static/style.css"
+    >
+
+</head>
+
+
+<body>
+
+    <main>
+
+        <h1>
+            Multi-Cloud DevOps Platform
+        </h1>
+
+
+        <section>
+
+            <h2>
+                Architecture
+            </h2>
+
+            <p>
+                Frontend running on Azure AKS
+            </p>
+
+            <p>
+                Backend running on AWS EKS
+            </p>
+
+        </section>
+
+
+        <section>
+
+            <h2>
+                Backend Information
+            </h2>
+
+
+            <button
+                onclick="getBackendInfo()"
+            >
+                Get Backend Info
+            </button>
+
+
+            <pre id="result">
+Click the button to contact the backend.
+            </pre>
+
+        </section>
+
+    </main>
+
+
+    <script>
+
+        async function getBackendInfo() {
+
+            const result =
+                document.getElementById(
+                    "result"
+                );
+
+
+            result.textContent =
+                "Loading...";
+
+
+            try {
+
+                const response =
+                    await fetch(
+                        "/backend-info"
+                    );
+
+
+                const data =
+                    await response.json();
+
+
+                result.textContent =
+                    JSON.stringify(
+                        data,
+                        null,
+                        2
+                    );
+
+
+            } catch (error) {
+
+                result.textContent =
+                    "Error: " +
+                    error.message;
+
+            }
+
+        }
+
+    </script>
+
+</body>
+
+</html>
