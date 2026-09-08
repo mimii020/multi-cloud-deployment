@@ -1,5 +1,1 @@
-{
-  "application": "Multi-Cloud DevOps Platform",
-  "environment": "production",
-  "message": "Configuration loaded from AWS S3"
-}
+{"feature_flags":{"new_ui":true},"api_version":"v1"}

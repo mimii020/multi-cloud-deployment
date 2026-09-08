@@ -1,80 +1,125 @@
-data "aws_availability_zones" "available" {
-  state = "available"
+terraform {
+  required_version = ">= 1.6.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
 }
 
-locals {
-  cluster_name = "${var.project_name}-${var.environment}-eks"
+provider "aws" {
+  region = var.aws_region
+}
+
+resource "aws_eks_cluster" "main" {
+  name     = "${var.project_name}-${var.environment}-eks"
+  role_arn = "arn:aws:iam::975050333241:role/eksClusterRole"
+  version  = "1.30"
+
+  vpc_config {
+    subnet_ids              = var.subnet_ids
+    security_group_ids      = [var.security_group_id]
+    endpoint_public_access  = true
+    endpoint_private_access = true
+  }
+
   tags = {
-    Project = var.project_name
+    Name        = "${var.project_name}-${var.environment}-eks"
+    Project     = var.project_name
     Environment = var.environment
-    ManagedBy = "Terraform"
+    ManagedBy   = "Terraform"
   }
 }
 
-module "vpc" {
-  source = "terraform-aws-modules/vpc/aws"
-  version = "~> 5.0"
-  name = "${var.project_name}-${var.environment}-vpc"
-  cidr = var.vpc_cidr
-  azs = slice(
-    data.aws_availability_zones.available.names,
-    0,
-    2
-  )
+resource "aws_eks_node_group" "main" {
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = "default-node-group"
+  node_role_arn   = "arn:aws:iam::975050333241:role/AmazonEKSNodeRole"
+  subnet_ids      = var.subnet_ids
 
-  private_subnets = [
-    "10.0.1.0/24",
-    "10.0.2.0/24"
-  ]
-
-  public_subnets = [
-    "10.0.101.0/24",
-    "10.0.102.0/24"
-  ]
-
-  enable_nat_gateway = true
-  single_nat_gateway = true
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-  public_subnet_tags = {
-    "kubernetes.io/role/elb" = "1"
+  scaling_config {
+    desired_size = 1
+    max_size     = 1
+    min_size     = 1
   }
 
-  private_subnet_tags = {
-    "kubernetes.io/role/internal-elb" = "1"
+  instance_types = ["t3.medium"]
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-node"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
   }
 
-  tags = local.tags
+  depends_on = [aws_eks_cluster.main]
 }
 
-module "eks" {
-  source = "terraform-aws-modules/eks/aws"
-  version = "~> 20.0"
-  cluster_name = local.cluster_name
-  cluster_version = "1.30"
-  cluster_endpoint_public_access = true
-  enable_cluster_creator_admin_permissions = true
-  vpc_id = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnets
-  eks_managed_node_groups = {
-    default = {
-      name = "default-node-group"
-      instance_types = [
-        "t3.medium"
-      ]
-
-      min_size = 1
-      max_size = 3
-      desired_size = 1
-    }
+resource "aws_s3_bucket" "backend" {
+  bucket_prefix = "${var.project_name}-backend-"
+  tags = {
+    Name = "${var.project_name}-backend"
   }
- 
-  cluster_addons = {
-    eks-pod-identity-agent = {
-        most_recent = true
-     }
-    }
+}
 
-  tags = local.tags
+resource "aws_s3_bucket_public_access_block" "backend" {
+  bucket = aws_s3_bucket.backend.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_object" "backend_config" {
+  bucket        = aws_s3_bucket.backend.id
+  key           = "config.json"
+  source        = "${path.module}/config.json"
+  content_type  = "application/json"
+}
+
+resource "aws_iam_policy" "backend_s3" {
+  name        = "${var.project_name}-backend-s3-policy"
+  description = "Allows backend pods to read configuration from S3"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${aws_s3_bucket.backend.arn}/*"]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role" "backend_pod" {
+  name = "${var.project_name}-backend-pod-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "pods.eks.amazonaws.com"
+        }
+        Action = ["sts:AssumeRole", "sts:TagSession"]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "backend_s3" {
+  role       = aws_iam_role.backend_pod.name
+  policy_arn = aws_iam_policy.backend_s3.arn
+}
+
+resource "aws_eks_pod_identity_association" "backend" {
+  cluster_name    = aws_eks_cluster.main.name
+  namespace       = "backend"
+  service_account = "backend-sa"
+  role_arn        = aws_iam_role.backend_pod.arn
 }

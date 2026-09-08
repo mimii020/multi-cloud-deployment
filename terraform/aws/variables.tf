@@ -1,24 +1,27 @@
 variable "aws_region" {
   description = "AWS region"
-  type = string
-  default = "eu-central-1"
-
+  type        = string
+  default     = "us-east-1"
 }
 
 variable "project_name" {
   description = "Project name"
-  type = string
-  default = "multicloud-devops"
+  type        = string
+  default     = "multicloud-devops"
 }
 
 variable "environment" {
   description = "Environment name"
-  type = string
-  default = "dev"
+  type        = string
+  default     = "dev"
 }
 
-variable "vpc_cidr" {
-  description = "VPC CIDR block"
-  type = string
-  default = "10.0.0.0/16"
+variable "subnet_ids" {
+  description = "List of subnet IDs for EKS"
+  type        = list(string)
+}
+
+variable "security_group_id" {
+  description = "Security group ID for EKS cluster"
+  type        = string
 }
