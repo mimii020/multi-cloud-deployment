@@ -1,9 +1,7 @@
 resource "aws_iam_policy" "backend_s3" {
   name = "${var.project_name}-backend-s3-policy"
   description = (
-    "Allows backend pods"
-    "to read configuration from S3"
-  )
+    "Allows backend pods to read configuration from S3")
 
   policy = jsonencode({
     Version = "2012-10-17"
